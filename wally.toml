@@ -1,0 +1,10 @@
+[package]
+name = "dekkonot/base91"
+description = "Codec for converting strings to and from Base91"
+registry = "https://github.com/UpliftGames/wally-index"
+realm = "shared"
+
+exclude = ["selene.toml", ".gitignore", "tests.lua"]
+version = "1.0.0"
+
+[dependencies]

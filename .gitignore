@@ -1,0 +1,9 @@
+# Roblox files
+*.rbxm
+*.rbxmx
+
+# Editor configuration things
+.vscode/
+
+sourcemap.json
+
