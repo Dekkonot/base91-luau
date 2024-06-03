@@ -1,7 +1,7 @@
 --!strict
 -- Pure Luau implementation of Base91 encoding and decoding.
 
--- This is the ratio used to allocate a buffer for the output of the functions
+-- This is the ratio used to allocate a table for the output of the functions
 -- The actual ratio of expansion varies between 200% and 123% depending upon
 -- the size of the input. This is a nice middleground to avoid
 -- oversizing while still avoiding reallocations
@@ -29,6 +29,122 @@ local function stringBuilder(input: { number }): string
 	table.clear(STRING_CHUNKS)
 
 	return output
+end
+
+--[=[
+	Takes a buffer and returns its base91-encoded contents in a new buffer.
+
+	For a function that operates on a string, see `encodeString`.
+	For a function that operates on an array of bytes, see `encodeByte`.
+
+	@param input The buffer to encode as base91.
+	@param skipTruncating Whether to skip trimming the buffer to be exactly the size of the output. Defaults to `false`.
+]=]
+local function encodeBuffer(input: buffer, skipTruncating: boolean?): buffer
+	local output = buffer.create(buffer.len(input) * 2)
+	local c = 0
+
+	local accum = 0
+	local bitC = 0
+
+	for i = 0, buffer.len(input) - 1 do
+		accum = bit32.bor(accum, bit32.lshift(buffer.readu8(input, i), bitC))
+		bitC += 8
+		if bitC > 13 then
+			-- TL;DR: You can do 13 bits instead of 14 around half the time,
+			-- which saves space at scale
+			local codepoint = bit32.band(accum, 8191) -- 2^13 - 1
+			if codepoint > 88 then
+				accum = bit32.rshift(accum, 13)
+				bitC -= 13
+			else
+				codepoint = bit32.band(accum, 16383) -- 2^14 - 1
+				accum = bit32.rshift(accum, 14)
+				bitC -= 14
+			end
+			-- Buffers write in little-endian, so we do this in reverse order
+			buffer.writeu16(output, c, bit32.lshift(encodeCharSet[codepoint // 91], 8) + encodeCharSet[codepoint % 91])
+			c += 2
+		end
+	end
+
+	if bitC > 0 then
+		buffer.writeu8(output, c, encodeCharSet[accum % 91])
+		c += 1
+		if bitC > 7 or accum > 90 then
+			buffer.writeu8(output, c, encodeCharSet[accum // 91])
+			c += 1
+		end
+	end
+
+	if skipTruncating then
+		return output
+	else
+		local truncated = buffer.create(c)
+		buffer.copy(truncated, 0, output, 0, c)
+		return truncated
+	end
+end
+
+--[=[
+	Takes a buffer and returns its contents decoded from base91 in a new
+	buffer.
+
+	For a function that operates on a string, see `encodeString`.
+	For a function that operates on an array of bytes, see `encodeByte`.
+
+	@param input The buffer to decode from base91.
+	@param skipTruncating Whether to skip trimming the buffer to be exactly the size of the output. Defaults to `false`.
+]=]
+local function decodeBuffer(input: buffer, skipTruncating: boolean?): buffer
+	local output = buffer.create(buffer.len(input) * 2)
+	local c = 0
+
+	local accum = 0
+	local bitC = 0
+	local codepoint = -1
+
+	-- This implementation is not my favorite thing in the world
+	-- but it is fast enough and don't care to do it any other way
+	for i = 0, buffer.len(input) - 1 do
+		local byte = buffer.readu8(input, i)
+		-- This skips things like whitespace
+		if not decodeCharSet[byte] then
+			continue
+		end
+		if codepoint == -1 then
+			codepoint = decodeCharSet[byte]
+		else
+			codepoint += decodeCharSet[byte] * 91
+			accum = bit32.bor(accum, bit32.lshift(codepoint, bitC))
+			if bit32.band(codepoint, 8191) > 88 then
+				bitC += 13
+			else
+				bitC += 14
+			end
+
+			while bitC > 7 do
+				buffer.writeu8(output, c, accum % 256)
+				c += 1
+				accum = bit32.rshift(accum, 8)
+				bitC -= 8
+			end
+			codepoint = -1
+		end
+	end
+
+	if codepoint ~= -1 then
+		buffer.writeu8(output, c, bit32.bor(accum, bit32.lshift(codepoint, bitC)) % 256)
+		c += 1
+	end
+
+	if skipTruncating then
+		return output
+	else
+		local truncated = buffer.create(c)
+		buffer.copy(truncated, 0, output, 0, c)
+		return truncated
+	end
 end
 
 --- Takes an array of 8 bit numbers and returns them as a base91 encoded
@@ -210,6 +326,9 @@ local function decodeString(input: string): string
 end
 
 return {
+	encodeBuffer = encodeBuffer,
+	decodeBuffer = decodeBuffer,
+
 	encodeBytes = encodeBytes,
 	decodeBytes = decodeBytes,
 

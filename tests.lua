@@ -55,10 +55,14 @@ for n, test in TEST_STRINGS do
 	end
 	local inputBytes = { string.byte(test[1], 1, -1) }
 	local outputBytes = { string.byte(test[2], 1, -1) }
+	local inputBuffer = buffer.fromstring(test[1])
+	local outputBuffer = buffer.fromstring(test[2])
 
+	local bufferEncodeTime, bufferEncodeResult = time(base91.encodeBuffer, inputBuffer)
 	local byteEncodeTime, byteEncodeResult = time(base91.encodeBytes, inputBytes)
 	local stringEncodeTime, stringEncodeResult = time(base91.encodeString, test[1])
 
+	local bufferDecodeTime, bufferDecodeResult = time(base91.decodeBuffer, outputBuffer)
 	local byteDecodeTime, byteDecodeResult = time(base91.decodeBytes, outputBytes)
 	local stringDecodeTime, stringDecodeResult = time(base91.decodeString, test[2])
 
@@ -93,8 +97,39 @@ for n, test in TEST_STRINGS do
 		end
 	end
 	print(`Test #{n} byte encode passed -- took {byteDecodeTime}s`)
+
+	if buffer.len(bufferEncodeResult) < buffer.len(outputBuffer) then
+		error(`Test #{n} buffer encode output was smaller than expected`)
+	end
+	for i = 0, buffer.len(outputBuffer) - 1 do
+		if buffer.readu8(bufferEncodeResult, i) ~= buffer.readu8(outputBuffer, i) then
+			error(
+				`Test #{n} buffer encode failed -- value differed at byte {i} (expected {buffer.readu8(outputBuffer, i)}, got {buffer.readu8(
+					bufferEncodeResult,
+					i
+				)})`
+			)
+		end
+	end
+	print(`Test #{n} buffer encode passed -- took {bufferEncodeTime}s`)
+
+	if buffer.len(bufferDecodeResult) < buffer.len(inputBuffer) then
+		error(`Test #{n} buffer decode output was smaller than expected`)
+	end
+	for i = 0, buffer.len(inputBuffer) - 1 do
+		if buffer.readu8(bufferDecodeResult, i) ~= buffer.readu8(inputBuffer, i) then
+			error(
+				`Test #{n} buffer decode failed -- value differed at byte {i} (expected {buffer.readu8(inputBuffer, i)}, got {buffer.readu8(
+					bufferDecodeResult,
+					i
+				)})`
+			)
+		end
+	end
+	print(`Test #{n} buffer encode passed -- took {bufferDecodeTime}s`)
+
+	print()
 end
-print()
 
 local input = "dekkonot"
 local last = input
