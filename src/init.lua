@@ -1,4 +1,6 @@
 --!strict
+--!optimize 2
+--!native
 -- Pure Luau implementation of Base91 encoding and decoding.
 
 -- This is the ratio used to allocate a table for the output of the functions
