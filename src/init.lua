@@ -19,10 +19,10 @@ for i = 1, 91 do
 end
 
 local STRING_CHUNKS = table.create(5)
+
 --- Takes an array of bytes and builds a string out of it.
 --- Uses `4096` byte chunks to make the string, which ends up being very fast.
 local function stringBuilder(input: { number }): string
-	-- print("building ", #input)
 	local inputLen = #input
 	for i = 1, inputLen, 4096 do
 		table.insert(STRING_CHUNKS, string.char(table.unpack(input, i, math.min(i + 4095, inputLen))))
@@ -34,13 +34,15 @@ local function stringBuilder(input: { number }): string
 end
 
 --[=[
-	Takes a buffer and returns its base91-encoded contents in a new buffer.
+	Takes a buffer and returns its contents encoded into base91.
 
 	For a function that operates on a string, see `encodeString`.
-	For a function that operates on an array of bytes, see `encodeByte`.
+	For a function that operates on an array of bytes, see `encodeBytes`.
 
 	@param input The buffer to encode as base91.
 	@param skipTruncating Whether to skip trimming the buffer to be exactly the size of the output. Defaults to `false`.
+
+	@return A buffer containing the contents of `input` after it has been encoded as base91.
 ]=]
 local function encodeBuffer(input: buffer, skipTruncating: boolean?): buffer
 	local output = buffer.create(buffer.len(input) * 2)
@@ -92,11 +94,13 @@ end
 	Takes a buffer and returns its contents decoded from base91 in a new
 	buffer.
 
-	For a function that operates on a string, see `encodeString`.
-	For a function that operates on an array of bytes, see `encodeByte`.
+	For a function that operates on a string, see `decodeString`.
+	For a function that operates on an array of bytes, see `decodeBytes`.
 
 	@param input The buffer to decode from base91.
 	@param skipTruncating Whether to skip trimming the buffer to be exactly the size of the output. Defaults to `false`.
+
+	@return A buffer containing the contents of `input` that has been decoded from base91.
 ]=]
 local function decodeBuffer(input: buffer, skipTruncating: boolean?): buffer
 	local output = buffer.create(buffer.len(input) * 2)
@@ -149,9 +153,16 @@ local function decodeBuffer(input: buffer, skipTruncating: boolean?): buffer
 	end
 end
 
---- Takes an array of 8 bit numbers and returns them as a base91 encoded
---- sequence of bytes
---- For a function that operates on a string, see `encodeString`.
+--[=[
+	Takes an array of bytes and returns its contents encoded into base91.
+
+	For a function that operates on a string, see `encodeString`.
+	For a function that operates on a buffer, see `encodeBuffer`.
+
+	@param input The array to encode as base91.
+
+	@return An array containing the contents of `input` after it has been encoded as base91.
+]=]
 local function encodeBytes(input: { number }): { number }
 	local output = table.create(math.ceil(#input * EXPECTED_EXPANSION))
 	local c = 1
@@ -187,15 +198,20 @@ local function encodeBytes(input: { number }): { number }
 		end
 	end
 
-	-- print(`input : {#input}            ratio: {#output / #input}`)
-	-- print(`output: {#output} expected output: {math.ceil(#input * EXPECTED_EXPANSION)}`)
-	-- print(`error: {#output - math.ceil(#input * EXPECTED_EXPANSION)}`)
 	return output
 end
 
---- Takes an array of base91 encoded bytes and returns them as a
---- sequence of 8-bit numbers.
---- For a function that operates on a string, see `decodeString`.
+--[=[
+	Takes an array of bytes and returns its contents decoded from base91 in a
+	new table.
+
+	For a function that operates on a string, see `decodeString`.
+	For a function that operates on a buffer, see `decodeBuffer`.
+
+	@param input The bytes to decode from base91.
+
+	@return An array containing the contents of `input` that has been decoded from base91.
+]=]
 local function decodeBytes(input: { number }): { number }
 	local output = table.create(math.ceil(#input / EXPECTED_EXPANSION))
 	local c = 1
@@ -236,13 +252,19 @@ local function decodeBytes(input: { number }): { number }
 		output[c] = bit32.bor(accum, bit32.lshift(codepoint, bitC)) % 256
 	end
 
-	-- print(`input : {#input}            ratio: {#input / #output}`)
-	-- print(`output: {#output} expected output: {math.ceil(#input / EXPECTED_EXPANSION)}`)
-	-- print(`error: {#output - math.ceil(#input / EXPECTED_EXPANSION)}`)
 	return output
 end
 
---- Takes a string and returns the base91 encoded version of it.
+--[=[
+	Takes a string and returns its contents encoded into base91.
+
+	For a function that operates on an array of bytes, see `encodeBytes`.
+	For a function that operates on a buffer, see `encodeBuffer`.
+
+	@param input The string to encode as base91.
+
+	@return A string containing the contents of `input` after it has been encoded as base91.
+]=]
 local function encodeString(input: string): string
 	local output = table.create(#input * EXPECTED_EXPANSION)
 	local c = 1
@@ -276,13 +298,19 @@ local function encodeString(input: string): string
 		end
 	end
 
-	-- print(`input : {#input}            ratio: {#output / #input}`)
-	-- print(`output: {#output} expected output: {math.ceil(#input * EXPECTED_EXPANSION)}`)
-	-- print(`error: {#output - math.ceil(#input * EXPECTED_EXPANSION)}`)
 	return stringBuilder(output)
 end
 
---- Takes a base91 encoded string and returns the unencoded version of it.
+--[=[
+	Takes a string and returns its contents decoded from base91 as a string.
+
+	For a function that operates on an array of bytes, see `decodeBytes`.
+	For a function that operates on a buffer, see `decodeBuffer`.
+
+	@param input The string to decode from base91.
+
+	@return A string containing the contents of `input` that has been decoded from base91.
+]=]
 local function decodeString(input: string): string
 	local output = table.create(math.ceil(#input / EXPECTED_EXPANSION))
 	local c = 1
@@ -321,13 +349,10 @@ local function decodeString(input: string): string
 		output[c] = bit32.bor(accum, bit32.lshift(codepoint, bitC)) % 256
 	end
 
-	-- print(`input : {#input}            ratio: {#input / #output}`)
-	-- print(`output: {#output} expected output: {math.ceil(#input / EXPECTED_EXPANSION)}`)
-	-- print(`error: {#output - math.ceil(#input / EXPECTED_EXPANSION)}`)
 	return stringBuilder(output)
 end
 
-return {
+return table.freeze({
 	encodeBuffer = encodeBuffer,
 	decodeBuffer = decodeBuffer,
 
@@ -336,4 +361,4 @@ return {
 
 	encodeString = encodeString,
 	decodeString = decodeString,
-}
+})
